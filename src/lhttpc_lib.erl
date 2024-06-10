@@ -137,19 +137,19 @@ maybe_atom_to_list(List) ->
 %%------------------------------------------------------------------------------
 -spec parse_url(string()) -> #lhttpc_url{}.
 parse_url(URL) ->
-    % XXX This should be possible to do with the re module?
+    %% XXX This should be possible to do with the re module?
     {Scheme, CredsHostPortPath} = split_scheme(URL),
     {User, Passwd, HostPortPath} = split_credentials(CredsHostPortPath),
     {Host, PortPath} = split_host(HostPortPath, []),
     {Port, Path} = split_port(Scheme, PortPath, []),
     #lhttpc_url{
-        host = string:to_lower(Host),
-        port = Port,
-        path = Path,
-        user = User,
-        password = Passwd,
-        is_ssl = (Scheme =:= https)
-    }.
+       host = string:to_lower(Host),
+       port = Port,
+       path = Path,
+       user = User,
+       password = Passwd,
+       is_ssl = (Scheme =:= https)
+      }.
 
 %%------------------------------------------------------------------------------
 %% @spec (Path, Method, Headers, Host, Port, Body, PartialUpload) -> Request
@@ -164,17 +164,17 @@ parse_url(URL) ->
 %% @end
 %%------------------------------------------------------------------------------
 -spec format_request(iolist(), method(), headers(), string(),
-    integer(), iolist(), boolean()) -> {boolean(), iolist()}.
+                     integer(), iolist(), boolean()) -> {boolean(), iolist()}.
 format_request(Path, Method, Hdrs, Host, Port, Body, PartialUpload) ->
     AllHdrs = add_mandatory_hdrs(Method, Hdrs, Host, Port, Body, PartialUpload),
     IsChunked = is_chunked(AllHdrs),
     {
-        IsChunked,
-        [
-            Method, " ", Path, " HTTP/1.1\r\n",
-            format_hdrs(AllHdrs),
-            format_body(Body, IsChunked)
-        ]
+     IsChunked,
+     [
+      Method, " ", Path, " HTTP/1.1\r\n",
+      format_hdrs(AllHdrs),
+      format_body(Body, IsChunked)
+     ]
     }.
 
 %%------------------------------------------------------------------------------
@@ -233,20 +233,20 @@ split_credentials(CredsHostPortPath) ->
         [HostPort] ->
             {"", "", string:join([HostPort | Path], "/")};
         [Creds, HostPort] ->
-            % RFC1738 (section 3.1) says:
-            % "The user name (and password), if present, are followed by a
-            % commercial at-sign "@", but it is only valid before the first
-            % "/".
-            % Within the user and password field, any ":",
-            % "@", or "/" must be encoded."
-            % The mentioned encoding is the "percent" encoding.
+            %% RFC1738 (section 3.1) says:
+            %% "The user name (and password), if present, are followed by a
+            %% commercial at-sign "@", but it is only valid before the first
+            %% "/".
+            %% Within the user and password field, any ":",
+            %% "@", or "/" must be encoded."
+            %% The mentioned encoding is the "percent" encoding.
             case string:tokens(Creds, ":") of
                 [User] ->
-                    % RFC1738 says ":password" is optional
-                    {http_uri:decode(User), "",
+                    %% RFC1738 says ":password" is optional
+                    {uri_string:unquote(User), "",
                      string:join([HostPort | Path], "/")};
                 [User, Passwd] ->
-                    {http_uri:decode(User), http_uri:decode(Passwd),
+                    {uri_string:unquote(User), uri_string:unquote(Passwd),
                      string:join([HostPort | Path], "/")}
             end
     end.
@@ -258,7 +258,7 @@ split_credentials(CredsHostPortPath) ->
 %%------------------------------------------------------------------------------
 -spec split_host(string(), string()) -> {string(), string()}.
 split_host("[" ++ Rest, []) ->
-    % IPv6 address literals are enclosed by square brackets (RFC2732)
+    %% IPv6 address literals are enclosed by square brackets (RFC2732)
     case string:str(Rest, "]") of
         0 ->
             split_host(Rest, "[");
@@ -331,8 +331,8 @@ format_body(Body, true) ->
             <<>>;
         Size ->
             [
-                erlang:integer_to_list(Size, 16), <<"\r\n">>,
-                Body, <<"\r\n">>
+             erlang:integer_to_list(Size, 16), <<"\r\n">>,
+             Body, <<"\r\n">>
             ]
     end.
 
@@ -375,18 +375,18 @@ add_content_headers(Hdrs, Body, false) ->
         undefined ->
             ContentLength = integer_to_list(iolist_size(Body)),
             [{"content-length", ContentLength} | Hdrs];
-        _ -> % We have a content length
+        _ ->%% We have a content length
             Hdrs
     end;
 add_content_headers(Hdrs, _Body, true) ->
     case {header_value("content-length", Hdrs),
-         header_value("transfer-encoding", Hdrs)} of
+          header_value("transfer-encoding", Hdrs)} of
         {undefined, undefined} ->
             [{"transfer-encoding", "chunked"} | Hdrs];
         {undefined, TransferEncoding} ->
             case string:to_lower(TransferEncoding) of
-            "chunked" -> Hdrs;
-            _ -> erlang:error({error, unsupported_transfer_encoding})
+                "chunked" -> Hdrs;
+                _ -> erlang:error({error, unsupported_transfer_encoding})
             end;
         {_Length, undefined} ->
             Hdrs;
@@ -404,7 +404,7 @@ add_host(Hdrs, Host, Port) ->
     case header_value("host", Hdrs) of
         undefined ->
             [{"Host", host(Host, Port) } | Hdrs];
-        _ -> % We have a host
+        _ ->%% We have a host
             Hdrs
     end.
 
@@ -416,7 +416,7 @@ add_host(Hdrs, Host, Port) ->
 -spec is_chunked(headers()) -> boolean().
 is_chunked(Hdrs) ->
     TransferEncoding = string:to_lower(
-        header_value("transfer-encoding", Hdrs, "undefined")),
+                         header_value("transfer-encoding", Hdrs, "undefined")),
     case TransferEncoding of
         "chunked" -> true;
         _ -> false
@@ -429,8 +429,8 @@ is_chunked(Hdrs) ->
 %%------------------------------------------------------------------------------
 -spec host(host(), port_num()) -> any().
 host(Host, 80)   -> maybe_ipv6_enclose(Host);
-% When proxying after an HTTP CONNECT session is established, squid doesn't
-% like the :443 suffix in the Host header.
+%% When proxying after an HTTP CONNECT session is established, squid doesn't
+%% like the :443 suffix in the Host header.
 host(Host, 443)  -> maybe_ipv6_enclose(Host);
 host(Host, Port) -> [maybe_ipv6_enclose(Host), $:, integer_to_list(Port)].
 
@@ -443,7 +443,7 @@ host(Host, Port) -> [maybe_ipv6_enclose(Host), $:, integer_to_list(Port)].
 maybe_ipv6_enclose(Host) ->
     case inet_parse:address(Host) of
         {ok, {_, _, _, _, _, _, _, _}} ->
-            % IPv6 address literals are enclosed by square brackets (RFC2732)
+            %% IPv6 address literals are enclosed by square brackets (RFC2732)
             [$[, Host, $]];
         _ ->
             Host

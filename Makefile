@@ -2,12 +2,12 @@
 
 PROJECT = lhttpc
 
-REBAR := ./rebar
+REBAR := rebar3
 DIALYZER = dialyzer
 
 APPS = kernel stdlib sasl inets ssl public_key crypto compiler
 
-all: compile doc
+all: compile
 
 compile:
 	$(REBAR) compile
@@ -24,11 +24,8 @@ release: all dialyze test
 clean:
 	$(REBAR) clean
 
-build-plt: compile
-	@$(DIALYZER) --build_plt --output_plt .$(PROJECT).plt \
-		--apps $(APPS)
+distclean:
+	@rm -r _build/
 
 dialyzer:
-	@$(DIALYZER) --fullpath  --src ./src \
-		--plt .$(PROJECT).plt --no_native \
-		-Werror_handling  #-Wrace_conditions
+	$(REBAR) dialyzer

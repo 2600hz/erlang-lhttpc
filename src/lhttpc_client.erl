@@ -40,7 +40,7 @@
 -include("lhttpc.hrl").
 
 -define(CONNECTION_HDR(HDRS, DEFAULT),
-    string:to_lower(lhttpc_lib:header_value("connection", HDRS, DEFAULT))).
+        string:to_lower(lhttpc_lib:header_value("connection", HDRS, DEFAULT))).
 
 -ifdef(OTP_RELEASE). %% this implies 21 or higher
 -define(EXCEPTION(Class, Reason, Stacktrace), Class:Reason:Stacktrace).
@@ -51,29 +51,29 @@
 -endif.
 
 -record(client_state, {
-        host :: string(),
-        port = 80 :: port_num(),
-        ssl = false :: boolean(),
-        method :: string(),
-        request :: iolist(),
-        request_headers :: headers(),
-        socket,
-        connect_timeout = infinity :: timeout(),
-        connect_options = [] :: [any()],
-        attempts :: integer(),
-        requester :: pid(),
-        partial_upload = false :: boolean(),
-        chunked_upload = false :: boolean(),
-        upload_window :: non_neg_integer() | infinity,
-        partial_download = false :: boolean(),
-        download_window = infinity :: timeout(),
-        part_size :: non_neg_integer() | infinity,
-        %% in case of infinity we read whatever data we can get from
-        %% the wire at that point or in case of chunked one chunk
-        proxy :: undefined | #lhttpc_url{},
-        proxy_ssl_options = [] :: [any()],
-        proxy_setup = false :: boolean()
-    }).
+                       host :: string(),
+                       port = 80 :: port_num(),
+                       ssl = false :: boolean(),
+                       method :: string(),
+                       request :: iolist() | undefined,
+                       request_headers :: headers(),
+                       socket,
+                       connect_timeout = infinity :: timeout(),
+                       connect_options = [] :: [any()],
+                       attempts :: integer(),
+                       requester :: pid(),
+                       partial_upload = false :: boolean(),
+                       chunked_upload = false :: boolean(),
+                       upload_window :: non_neg_integer() | infinity,
+                       partial_download = false :: boolean(),
+                       download_window = infinity :: timeout(),
+                       part_size :: non_neg_integer() | infinity,
+                       %% in case of infinity we read whatever data we can get from
+                       %% the wire at that point or in case of chunked one chunk
+                       proxy :: undefined | #lhttpc_url{},
+                       proxy_ssl_options = [] :: [any()],
+                       proxy_setup = false :: boolean()
+                      }).
 
 %%==============================================================================
 %% Exported functions
@@ -95,24 +95,24 @@
 %% @end
 %%------------------------------------------------------------------------------
 -spec request(pid(), string(), port_num(), boolean(), string(),
-        method(), headers(), iolist(), options()) -> ok.
+              method(), headers(), iolist(), options()) -> ok.
 request(From, Host, Port, Ssl, Path, Method, Hdrs, Body, Options) ->
     Result = try
-        execute(From, Host, Port, Ssl, Path, Method, Hdrs, Body, Options)
-    catch
-        Reason ->
-            {response, self(), {error, Reason}};
-        error:closed ->
-            {response, self(), {error, connection_closed}};
-        ?EXCEPTION(Class, Reason, Stacktrace) when Class == error; Class == exit ->
-            {response, self(), {error, {Reason, ?GET_STACK(Stacktrace)}}}
-    end,
+                 execute(From, Host, Port, Ssl, Path, Method, Hdrs, Body, Options)
+             catch
+                 Reason ->
+                     {response, self(), {error, Reason}};
+                 error:closed ->
+                     {response, self(), {error, connection_closed}};
+                 ?EXCEPTION(Class, Reason, Stacktrace) when Class == error; Class == exit ->
+                     {response, self(), {error, {Reason, ?GET_STACK(Stacktrace)}}}
+             end,
     case Result of
         {response, _, {ok, {no_return, _}}} -> ok;
         _Else                               -> From ! Result
     end,
-    % Don't send back {'EXIT', self(), normal} if the process
-    % calling us is trapping exits
+                                                % Don't send back {'EXIT', self(), normal} if the process
+                                                % calling us is trapping exits
     unlink(From),
     ok.
 
@@ -133,87 +133,87 @@ execute(From, Host, Port, Ssl, Path, Method, Hdrs0, Body, Options) ->
     PartialDownloadOptions = proplists:get_value(partial_download, Options, []),
     NormalizedMethod = lhttpc_lib:normalize_method(Method),
     Proxy = case proplists:get_value(proxy, Options) of
-        undefined ->
-            undefined;
-        ProxyUrl when is_list(ProxyUrl), not Ssl ->
-            % The point of HTTP CONNECT proxying is to use TLS tunneled in
-            % a plain HTTP/1.1 connection to the proxy (RFC2817).
-            throw(origin_server_not_https);
-        ProxyUrl when is_list(ProxyUrl) ->
-            lhttpc_lib:parse_url(ProxyUrl)
-    end,
+                undefined ->
+                    undefined;
+                ProxyUrl when is_list(ProxyUrl), not Ssl ->
+                                                % The point of HTTP CONNECT proxying is to use TLS tunneled in
+                                                % a plain HTTP/1.1 connection to the proxy (RFC2817).
+                    throw(origin_server_not_https);
+                ProxyUrl when is_list(ProxyUrl) ->
+                    lhttpc_lib:parse_url(ProxyUrl)
+            end,
     Hdrs = lhttpc_lib:canonical_headers(Hdrs0),
     {ChunkedUpload, Request} = lhttpc_lib:format_request(Path, NormalizedMethod,
-        Hdrs, Host, Port, Body, PartialUpload),
-    %SocketRequest = {socket, self(), Host, Port, Ssl},
+                                                         Hdrs, Host, Port, Body, PartialUpload),
+                                                %SocketRequest = {socket, self(), Host, Port, Ssl},
     Pool = proplists:get_value(pool, Options, whereis(lhttpc_manager)),
     %% Get a socket for the pool or exit
-    %Socket = lhttpc_manager:ensure_call(Pool, SocketRequest, Options),
+                                                %Socket = lhttpc_manager:ensure_call(Pool, SocketRequest, Options),
     Socket = lhttpc_manager:ensure_call(Pool, self(), Host, Port, Ssl, Options),
-    % get the socket connect settings from client or use defaults
-    % unfold all atoms and allow users to overwrite a single param only
+                                                % get the socket connect settings from client or use defaults
+                                                % unfold all atoms and allow users to overwrite a single param only
     DefOptions = proplists:unfold(application:get_env(lhttpc, connect_options, [])),
     DefTimeout = application:get_env(lhttpc, connect_timeout, infinity),
     UserOptions = proplists:unfold(proplists:get_value(connect_options, Options, [])),
     EffectiveTcpOptions0 = lists:ukeymerge(1,
-        lists:ukeysort(1, UserOptions),
-        lists:ukeysort(1, DefOptions)
-    ),
+                                           lists:ukeysort(1, UserOptions),
+                                           lists:ukeysort(1, DefOptions)
+                                          ),
     EffectiveTcpOptions = fix_inet_options(EffectiveTcpOptions0),
     EffectiveOptions = case Ssl of
-        true ->
-            DefSslOptions = application:get_env(lhttpc, ssl_options, []),
-            UserSslOptions = proplists:get_value(ssl_options, Options, []),
-            EffectiveSslOpts0 = lists:ukeymerge(1,
-                lists:ukeysort(1, UserSslOptions),
-                lists:ukeysort(1, DefSslOptions)
-            ),
-            EffectiveSslOpts = add_cacerts(EffectiveSslOpts0),
-            EffectiveTcpOptions ++ EffectiveSslOpts;
-        false ->
-            EffectiveTcpOptions
-    end,
+                           true ->
+                               DefSslOptions = application:get_env(lhttpc, ssl_options, []),
+                               UserSslOptions = proplists:get_value(ssl_options, Options, []),
+                               EffectiveSslOpts0 = lists:ukeymerge(1,
+                                                                   lists:ukeysort(1, UserSslOptions),
+                                                                   lists:ukeysort(1, DefSslOptions)
+                                                                  ),
+                               EffectiveSslOpts = add_cacerts(EffectiveSslOpts0),
+                               EffectiveTcpOptions ++ EffectiveSslOpts;
+                           false ->
+                               EffectiveTcpOptions
+                       end,
 
     EffectiveTimeout = proplists:get_value(connect_timeout, Options, DefTimeout),
     State = #client_state{
-        host = Host,
-        port = Port,
-        ssl = Ssl,
-        method = NormalizedMethod,
-        request = Request,
-        requester = From,
-        request_headers = Hdrs,
-        socket = Socket,
-        connect_timeout = EffectiveTimeout,
-        connect_options = EffectiveOptions,
-        attempts = 1 + proplists:get_value(send_retry, Options, 1),
-        partial_upload = PartialUpload,
-        upload_window = UploadWindowSize,
-        chunked_upload = ChunkedUpload,
-        partial_download = PartialDownload,
-        download_window = proplists:get_value(window_size,
-            PartialDownloadOptions, infinity),
-        part_size = proplists:get_value(part_size,
-            PartialDownloadOptions, infinity),
-        proxy = Proxy,
-        proxy_setup = (Socket =/= undefined),
-        proxy_ssl_options = proplists:get_value(proxy_ssl_options, Options, [])
-    },
+               host = Host,
+               port = Port,
+               ssl = Ssl,
+               method = NormalizedMethod,
+               request = Request,
+               requester = From,
+               request_headers = Hdrs,
+               socket = Socket,
+               connect_timeout = EffectiveTimeout,
+               connect_options = EffectiveOptions,
+               attempts = 1 + proplists:get_value(send_retry, Options, 1),
+               partial_upload = PartialUpload,
+               upload_window = UploadWindowSize,
+               chunked_upload = ChunkedUpload,
+               partial_download = PartialDownload,
+               download_window = proplists:get_value(window_size,
+                                                     PartialDownloadOptions, infinity),
+               part_size = proplists:get_value(part_size,
+                                               PartialDownloadOptions, infinity),
+               proxy = Proxy,
+               proxy_setup = (Socket =/= undefined),
+               proxy_ssl_options = proplists:get_value(proxy_ssl_options, Options, [])
+              },
     Response = case send_request(State) of
-        {R, undefined} ->
-            {ok, R};
-        {R, NewSocket} ->
-            % The socket we ended up doing the request over is returned
-            % here, it might be the same as Socket, but we don't know.
-            % I've noticed that we don't want to give send sockets that we
-            % can't change the controlling process for to the manager. This
-            % really shouldn't fail, but it could do if:
-            % * The socket was closed remotely already
-            % * Due to an error in this module (returning dead sockets for
-            %   instance)
-            ok = lhttpc_manager:client_done(Pool, Host, Port, Ssl, NewSocket),
-            {ok, R}
-    end,
+                   {R, undefined} ->
+                       {ok, R};
+                   {R, NewSocket} ->
+                                                % The socket we ended up doing the request over is returned
+                                                % here, it might be the same as Socket, but we don't know.
+                                                % I've noticed that we don't want to give send sockets that we
+                                                % can't change the controlling process for to the manager. This
+                                                % really shouldn't fail, but it could do if:
+                                                % * The socket was closed remotely already
+                                                % * Due to an error in this module (returning dead sockets for
+                                                %   instance)
+                       ok = lhttpc_manager:client_done(Pool, Host, Port, Ssl, NewSocket),
+                       {ok, R}
+               end,
     {response, self(), Response}.
 
 %%------------------------------------------------------------------------------
@@ -223,9 +223,9 @@ execute(From, Host, Port, Ssl, Path, Method, Hdrs0, Body, Options) ->
 %% @end
 %%------------------------------------------------------------------------------
 send_request(#client_state{attempts = 0}) ->
-    % Don't try again if the number of allowed attempts is 0.
+                                                % Don't try again if the number of allowed attempts is 0.
     throw(connection_closed);
-%we need a socket.
+                                                %we need a socket.
 send_request(#client_state{socket = undefined} = State) ->
     {Host, Port, Ssl} = request_first_destination(State),
     Timeout = State#client_state.connect_timeout,
@@ -233,17 +233,17 @@ send_request(#client_state{socket = undefined} = State) ->
     ConnectOptions = case (not lists:member(inet, ConnectOptions0)) andalso
                          (not lists:member(inet6, ConnectOptions0)) andalso
                          is_ipv6_host(Host) of
-        true ->
-            [inet6 | ConnectOptions0];
-        false ->
-            ConnectOptions0
-    end,
+                         true ->
+                             [inet6 | ConnectOptions0];
+                         false ->
+                             ConnectOptions0
+                     end,
     SocketOptions = [binary, {packet, http}, {active, false} | ConnectOptions],
     try lhttpc_sock:connect(Host, Port, SocketOptions, Timeout, Ssl) of
         {ok, Socket} ->
             send_request(State#client_state{socket = Socket});
         {error, etimedout} ->
-            % TCP stack decided to give up
+                                                % TCP stack decided to give up
             throw(connect_timeout);
         {error, timeout} ->
             throw(connect_timeout);
@@ -255,40 +255,40 @@ send_request(#client_state{socket = undefined} = State) ->
         exit:{{{badmatch, {error, {asn1, _}}}, _}, _} ->
             throw(ssl_decode_error);
         ?EXCEPTION(Type, Error, Stacktrace) ->
-                    error_logger:error_msg("Socket connection error: ~p ~p, ~p",
-                                           [Type, Error, ?GET_STACK(Stacktrace)])
+            error_logger:error_msg("Socket connection error: ~p ~p, ~p",
+                                   [Type, Error, ?GET_STACK(Stacktrace)])
     end;
 send_request(#client_state{proxy = #lhttpc_url{}, proxy_setup = false} = State) ->
-% use a proxy.
+                                                % use a proxy.
     #lhttpc_url{
-        user = User,
-        password = Passwd,
-        is_ssl = Ssl
-    } = State#client_state.proxy,
+       user = User,
+       password = Passwd,
+       is_ssl = Ssl
+      } = State#client_state.proxy,
     #client_state{
-        host = DestHost,
-        port = Port,
-        socket = Socket
-    } = State,
+       host = DestHost,
+       port = Port,
+       socket = Socket
+      } = State,
     Host = case inet_parse:address(DestHost) of
-        {ok, {_, _, _, _, _, _, _, _}} ->
-            % IPv6 address literals are enclosed by square brackets (RFC2732)
-            [$[, DestHost, $], $:, integer_to_list(Port)];
-        _ ->
-            [DestHost, $:, integer_to_list(Port)]
-    end,
+               {ok, {_, _, _, _, _, _, _, _}} ->
+                                                % IPv6 address literals are enclosed by square brackets (RFC2732)
+                   [$[, DestHost, $], $:, integer_to_list(Port)];
+               _ ->
+                   [DestHost, $:, integer_to_list(Port)]
+           end,
     ConnectRequest = [
-        "CONNECT ", Host, " HTTP/1.1\r\n",
-        "Host: ", Host, "\r\n",
-        case User of
-            "" ->
-                "";
-            _ ->
-                ["Proxy-Authorization: Basic ",
-                    base64:encode(User ++ ":" ++ Passwd), "\r\n"]
-        end,
-        "\r\n"
-    ],
+                      "CONNECT ", Host, " HTTP/1.1\r\n",
+                      "Host: ", Host, "\r\n",
+                      case User of
+                          "" ->
+                              "";
+                          _ ->
+                              ["Proxy-Authorization: Basic ",
+                               base64:encode(User ++ ":" ++ Passwd), "\r\n"]
+                      end,
+                      "\r\n"
+                     ],
     case lhttpc_sock:send(Socket, ConnectRequest, Ssl) of
         ok ->
             read_proxy_connect_response(State, nil, nil);
@@ -300,23 +300,23 @@ send_request(#client_state{proxy = #lhttpc_url{}, proxy_setup = false} = State) 
             erlang:error(Reason)
     end;
 send_request(State) ->
-%already have socket
+                                                %already have socket
     Socket = State#client_state.socket,
     Ssl = State#client_state.ssl,
     Request = State#client_state.request,
     case lhttpc_sock:send(Socket, Request, Ssl) of
         ok ->
             if
-                % {partial_upload, WindowSize} is used.
+                                                % {partial_upload, WindowSize} is used.
                 State#client_state.partial_upload     -> partial_upload(State);
                 not State#client_state.partial_upload -> read_response(State)
             end;
         {error, closed} ->
             lhttpc_sock:close(Socket, Ssl),
             NewState = State#client_state{
-                socket = undefined,
-                attempts = State#client_state.attempts - 1
-            },
+                         socket = undefined,
+                         attempts = State#client_state.attempts - 1
+                        },
             send_request(NewState);
         {error, Reason} ->
             lhttpc_sock:close(Socket, Ssl),
@@ -343,25 +343,25 @@ read_proxy_connect_response(State, StatusCode, StatusText) ->
         {ok, {http_header, _, _Name, _, _Value}} ->
             read_proxy_connect_response(State, StatusCode, StatusText);
         {ok, http_eoh} when StatusCode >= 100, StatusCode =< 199 ->
-            % RFC 2616, section 10.1:
-            % A client MUST be prepared to accept one or more
-            % 1xx status responses prior to a regular
-            % response, even if the client does not expect a
-            % 100 (Continue) status message. Unexpected 1xx
-            % status responses MAY be ignored by a user agent.
+                                                % RFC 2616, section 10.1:
+                                                % A client MUST be prepared to accept one or more
+                                                % 1xx status responses prior to a regular
+                                                % response, even if the client does not expect a
+                                                % 100 (Continue) status message. Unexpected 1xx
+                                                % status responses MAY be ignored by a user agent.
             read_proxy_connect_response(State, nil, nil);
         {ok, http_eoh} when StatusCode >= 200, StatusCode < 300 ->
-            % RFC2817, any 2xx code means success.
+                                                % RFC2817, any 2xx code means success.
             ConnectOptions = State#client_state.connect_options,
             SslOptions = State#client_state.proxy_ssl_options,
             Timeout = State#client_state.connect_timeout,
             State2 = case ssl:connect(Socket, SslOptions ++ ConnectOptions, Timeout) of
-                {ok, SslSocket} ->
-                    State#client_state{socket = SslSocket, proxy_setup = true};
-                {error, Reason} ->
-                    lhttpc_sock:close(Socket, ProxyIsSsl),
-                    erlang:error({proxy_connection_failed, Reason})
-            end,
+                         {ok, SslSocket} ->
+                             State#client_state{socket = SslSocket, proxy_setup = true};
+                         {error, Reason} ->
+                             lhttpc_sock:close(Socket, ProxyIsSsl),
+                             erlang:error({proxy_connection_failed, Reason})
+                     end,
             send_request(State2);
         {ok, http_eoh} ->
             throw({proxy_connection_refused, StatusCode, StatusText});
@@ -455,7 +455,7 @@ read_response(#client_state{socket = Socket, ssl = Ssl} = State) ->
 %% @end
 %%------------------------------------------------------------------------------
 -spec read_response(#client_state{}, {integer(), integer()} | 'nil', http_status(),
-       any()) -> {any(), socket()} | no_return().
+                    any()) -> {any(), socket()} | no_return().
 read_response(State, Vsn, {StatusCode, _} = Status, Hdrs) ->
     Socket = State#client_state.socket,
     Ssl = State#client_state.ssl,
@@ -467,12 +467,12 @@ read_response(State, Vsn, {StatusCode, _} = Status, Hdrs) ->
             Header = lhttpc_lib:canonical_header({Name, Value}),
             read_response(State, Vsn, Status, [Header | Hdrs]);
         {ok, http_eoh} when StatusCode >= 100, StatusCode =< 199 ->
-            % RFC 2616, section 10.1:
-            % A client MUST be prepared to accept one or more
-            % 1xx status responses prior to a regular
-            % response, even if the client does not expect a
-            % 100 (Continue) status message. Unexpected 1xx
-            % status responses MAY be ignored by a user agent.
+                                                % RFC 2616, section 10.1:
+                                                % A client MUST be prepared to accept one or more
+                                                % 1xx status responses prior to a regular
+                                                % response, even if the client does not expect a
+                                                % 100 (Continue) status message. Unexpected 1xx
+                                                % status responses MAY be ignored by a user agent.
             read_response(State, nil, {nil, nil}, []);
         {ok, http_eoh} ->
             lhttpc_sock:setopts(Socket, [{packet, raw}], Ssl),
@@ -482,16 +482,16 @@ read_response(State, Vsn, {StatusCode, _} = Status, Hdrs) ->
             NewSocket = maybe_close_socket(Socket, Ssl, Vsn, ReqHdrs, NewHdrs),
             {Response, NewSocket};
         {error, closed} ->
-            % Either we only noticed that the socket was closed after we
-            % sent the request, the server closed it just after we put
-            % the request on the wire or the server has some issues and is
-            % closing connections without sending responses.
-            % If this the first attempt to send the request, we will try again.
+                                                % Either we only noticed that the socket was closed after we
+                                                % sent the request, the server closed it just after we put
+                                                % the request on the wire or the server has some issues and is
+                                                % closing connections without sending responses.
+                                                % If this the first attempt to send the request, we will try again.
             lhttpc_sock:close(Socket, Ssl),
             NewState = State#client_state{
-                socket = undefined,
-                attempts = State#client_state.attempts - 1
-            },
+                         socket = undefined,
+                         attempts = State#client_state.attempts - 1
+                        },
             send_request(NewState);
         {ok, {http_error, _} = Reason} ->
             erlang:error(Reason);
@@ -505,11 +505,11 @@ read_response(State, Vsn, {StatusCode, _} = Status, Hdrs) ->
 %% @end
 %%------------------------------------------------------------------------------
 -spec handle_response_body(#client_state{}, {integer(), integer()},
-                http_status(), headers()) -> {http_status(), headers(), body()} |
-                                             {http_status(), headers()}.
+                           http_status(), headers()) -> {http_status(), headers(), body()} |
+          {http_status(), headers()}.
 handle_response_body(#client_state{partial_download = false} = State, Vsn,
-        Status, Hdrs) ->
-%when {partial_download, PartialDownloadOptions} option is NOT used.
+                     Status, Hdrs) ->
+                                                %when {partial_download, PartialDownloadOptions} option is NOT used.
     Socket = State#client_state.socket,
     Ssl = State#client_state.ssl,
     Method = State#client_state.method,
@@ -519,8 +519,8 @@ handle_response_body(#client_state{partial_download = false} = State, Vsn,
                       end,
     {Status, NewHdrs, Body};
 handle_response_body(#client_state{partial_download = true} = State, Vsn,
-        Status, Hdrs) ->
-%when {partial_download, PartialDownloadOptions} option is used.
+                     Status, Hdrs) ->
+                                                %when {partial_download, PartialDownloadOptions} option is used.
     Method = State#client_state.method,
     case has_body(Method, element(1, Status), Hdrs) of
         true ->
@@ -539,11 +539,11 @@ handle_response_body(#client_state{partial_download = true} = State, Vsn,
 %%------------------------------------------------------------------------------
 -spec has_body(method(), integer(), headers()) -> boolean().
 has_body("HEAD", _, _) ->
-    % HEAD responses aren't allowed to include a body
+                                                % HEAD responses aren't allowed to include a body
     false;
 has_body("OPTIONS", _, Hdrs) ->
-    % OPTIONS can include a body, if Content-Length or Transfer-Encoding
-    % indicates it
+                                                % OPTIONS can include a body, if Content-Length or Transfer-Encoding
+                                                % indicates it
     ContentLength = lhttpc_lib:header_value("content-length", Hdrs),
     TransferEncoding = lhttpc_lib:header_value("transfer-encoding", Hdrs),
     case {ContentLength, TransferEncoding} of
@@ -560,18 +560,18 @@ has_body(_, _, _) ->
 %%------------------------------------------------------------------------------
 %% @private
 %% @doc  Find out how to read the entity body from the request.
-% * If Transfer-Encoding is set to chunked, we should read one chunk at
-%   the time, ignoring a Content-Length header if it is present in error
-% * If we have a Content-Length, just use that and read the complete
-%   entity.
-% * If neither of this is true, we need to read until the socket is
-%   closed (AFAIK, this was common in versions before 1.1).
+                                                % * If Transfer-Encoding is set to chunked, we should read one chunk at
+                                                %   the time, ignoring a Content-Length header if it is present in error
+                                                % * If we have a Content-Length, just use that and read the complete
+                                                %   entity.
+                                                % * If neither of this is true, we need to read until the socket is
+                                                %   closed (AFAIK, this was common in versions before 1.1).
 %% @end
 %%------------------------------------------------------------------------------
 -spec body_type(headers()) -> 'chunked' | 'infinite' | {fixed_length, integer()}.
 body_type(Hdrs) ->
     TransferEncoding = string:tokens(string:to_lower(lhttpc_lib:header_value(
-        "transfer-encoding", Hdrs, "identity")), ", "),
+                                                       "transfer-encoding", Hdrs, "identity")), ", "),
     ContentLength = lhttpc_lib:header_value("content-length", Hdrs),
     case {lists:member("chunked", TransferEncoding), ContentLength} of
         {true, _} -> chunked;
@@ -592,7 +592,7 @@ read_partial_body(State, Vsn, Hdrs, infinite) ->
     read_partial_infinite_body(State, Hdrs, State#client_state.download_window);
 read_partial_body(State, _Vsn, Hdrs, {fixed_length, ContentLength}) ->
     read_partial_finite_body(State, Hdrs, ContentLength,
-        State#client_state.download_window).
+                             State#client_state.download_window).
 
 %%------------------------------------------------------------------------------
 %%% @private
@@ -613,7 +613,7 @@ read_body(_Vsn, Hdrs, Ssl, Socket, {fixed_length, ContentLength}) ->
 read_partial_finite_body(State = #client_state{}, Hdrs, 0, _Window) ->
     reply_end_of_body(State, [], Hdrs);
 read_partial_finite_body(State = #client_state{requester = To}, Hdrs,
-        ContentLength, 0) ->
+                         ContentLength, 0) ->
     receive
         {ack, To} ->
             read_partial_finite_body(State, Hdrs, ContentLength, 1);
@@ -646,13 +646,13 @@ read_partial_finite_body(State, Hdrs, ContentLength, Window) when Window >= 0->
 read_body_part(#client_state{part_size = infinity} = State, _ContentLength) ->
     lhttpc_sock:recv(State#client_state.socket, State#client_state.ssl);
 read_body_part(#client_state{part_size = PartSize} = State, ContentLength)
-        when PartSize =< ContentLength ->
+  when PartSize =< ContentLength ->
     Socket = State#client_state.socket,
     Ssl = State#client_state.ssl,
     PartSize = State#client_state.part_size,
     lhttpc_sock:recv(Socket, PartSize, Ssl);
 read_body_part(#client_state{part_size = PartSize} = State, ContentLength)
-        when PartSize > ContentLength ->
+  when PartSize > ContentLength ->
     Socket = State#client_state.socket,
     Ssl = State#client_state.ssl,
     lhttpc_sock:recv(Socket, ContentLength, Ssl).
@@ -686,13 +686,13 @@ read_partial_chunked_body(State, Hdrs, Window, BufferSize, Buffer, 0) ->
             read_partial_chunked_body(State, Hdrs, NewWindow, 0, [], 0);
         ChunkSize when BufferSize + ChunkSize >= PartSize ->
             {Chunk, RemSize} = read_partial_chunk(Socket, Ssl,
-                PartSize - BufferSize, ChunkSize),
+                                                  PartSize - BufferSize, ChunkSize),
             NewWindow = reply_chunked_part(State, [Chunk | Buffer], Window),
             read_partial_chunked_body(State, Hdrs, NewWindow, 0, [], RemSize);
         ChunkSize ->
             Chunk = read_chunk(Socket, Ssl, ChunkSize),
             read_partial_chunked_body(State, Hdrs, Window,
-                BufferSize + ChunkSize, [Chunk | Buffer], 0)
+                                      BufferSize + ChunkSize, [Chunk | Buffer], 0)
     end;
 read_partial_chunked_body(State, Hdrs, Window, BufferSize, Buffer, RemSize) ->
     Socket = State#client_state.socket,
@@ -704,11 +704,11 @@ read_partial_chunked_body(State, Hdrs, Window, BufferSize, Buffer, RemSize) ->
                 read_partial_chunk(Socket, Ssl, PartSize - BufferSize, RemSize),
             NewWindow = reply_chunked_part(State, [Chunk | Buffer], Window),
             read_partial_chunked_body(State, Hdrs, NewWindow, 0, [],
-                NewRemSize);
+                                      NewRemSize);
         BufferSize + RemSize < PartSize ->
             Chunk = read_chunk(Socket, Ssl, RemSize),
             read_partial_chunked_body(State, Hdrs, Window, BufferSize + RemSize,
-                [Chunk | Buffer], 0)
+                                      [Chunk | Buffer], 0)
     end.
 
 %%------------------------------------------------------------------------------
@@ -741,7 +741,7 @@ reply_chunked_part(#client_state{requester = Pid}, Buffer, Window) ->
         {ack, Pid} ->  Window;
         {'DOWN', _, process, Pid, _} -> exit(normal)
     after 0 ->
-        lhttpc_lib:dec(Window)
+            lhttpc_lib:dec(Window)
     end.
 
 %%------------------------------------------------------------------------------
@@ -809,7 +809,7 @@ read_chunk(Socket, Ssl, Size) ->
 %% @private
 %%------------------------------------------------------------------------------
 -spec read_trailers(socket(), boolean(), any(), any()) ->
-                           {any(), any()} | no_return().
+          {any(), any()} | no_return().
 read_trailers(Socket, Ssl, Trailers, Hdrs) ->
     lhttpc_sock:setopts(Socket, [{packet, httph}], Ssl),
     case lhttpc_sock:recv(Socket, Ssl) of
@@ -841,7 +841,7 @@ read_partial_infinite_body(State = #client_state{requester = To}, Hdrs, 0) ->
             exit(normal)
     end;
 read_partial_infinite_body(State = #client_state{requester = To}, Hdrs, Window)
-        when Window >= 0 ->
+  when Window >= 0 ->
     case read_infinite_body_part(State) of
         http_eob -> reply_end_of_body(State, [], Hdrs);
         Bin ->
@@ -852,7 +852,7 @@ read_partial_infinite_body(State = #client_state{requester = To}, Hdrs, Window)
                 {'DOWN', _, process, To, _} ->
                     exit(normal)
             after 0 ->
-                read_partial_infinite_body(State, Hdrs, lhttpc_lib:dec(Window))
+                    read_partial_infinite_body(State, Hdrs, lhttpc_lib:dec(Window))
             end
     end.
 
@@ -890,7 +890,7 @@ check_infinite_response(_, Hdrs) ->
 %% @private
 %%------------------------------------------------------------------------------
 -spec read_infinite_body(socket(), headers(), boolean()) ->
-                        {binary(), headers()} | no_return().
+          {binary(), headers()} | no_return().
 read_infinite_body(Socket, Hdrs, Ssl) ->
     read_until_closed(Socket, <<>>, Hdrs, Ssl).
 
@@ -898,7 +898,7 @@ read_infinite_body(Socket, Hdrs, Ssl) ->
 %% @private
 %%------------------------------------------------------------------------------
 -spec read_until_closed(socket(), binary(), any(), boolean()) ->
-                        {binary(), any()} | no_return().
+          {binary(), any()} | no_return().
 read_until_closed(Socket, Acc, Hdrs, Ssl) ->
     case lhttpc_sock:recv(Socket, Ssl) of
         {ok, Body} ->
@@ -945,7 +945,7 @@ is_ipv6_host(Host) ->
         {ok, {_, _, _, _}} ->
             false;
         _ ->
-            % Prefer IPv4 over IPv6.
+                                                % Prefer IPv4 over IPv6.
             case inet:getaddr(Host, inet) of
                 {ok, _} ->
                     false;
@@ -964,15 +964,15 @@ is_ipv6_host(Host) ->
 %%------------------------------------------------------------------------------
 fix_inet_options(Options) ->
     lists:filtermap(
-        fun ({AddressFamily, Bool}) when AddressFamily =:= inet;
-                                         AddressFamily =:= inet6;
-                                         AddressFamily =:= local ->
-                case Bool of
-                    true -> {true, AddressFamily};
-                    false -> false
-                end;
-            (Option) -> {true, Option}
-        end, Options).
+      fun ({AddressFamily, Bool}) when AddressFamily =:= inet;
+                                       AddressFamily =:= inet6;
+                                       AddressFamily =:= local ->
+              case Bool of
+                  true -> {true, AddressFamily};
+                  false -> false
+              end;
+          (Option) -> {true, Option}
+      end, Options).
 
 -ifdef(cacerts).
 add_cacerts(ConnOpts) ->
